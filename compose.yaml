@@ -25,7 +25,7 @@ services:
     networks:
       - docker-proxy
   hooked:
-    image: ghcr.io/jlhg/hooked:latest
+    image: ghcr.io/cldotdev/hooked:latest
     restart: unless-stopped
     user: "${HOST_UID:-0}:${HOST_GID:-0}"
     depends_on:

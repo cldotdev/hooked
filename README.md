@@ -14,7 +14,7 @@ A simple command-line CI/CD tool that triggers custom build and deployment comma
 Clone the repository:
 
 ```txt
-git clone https://github.com/jlhg/hooked.git
+git clone https://github.com/cldotdev/hooked.git
 ```
 
 Run `cargo build`:
@@ -83,7 +83,7 @@ HOST_GID=1000
 
 Use the output of `id -u` and `id -g`. Bash's own `UID` variable is not exported, so compose cannot read it.
 
-See `compose.yaml` for a complete example.
+See `compose.yaml` for a complete example. Released images are published as `ghcr.io/cldotdev/hooked`.
 
 ## Migration
 
@@ -101,11 +101,20 @@ The settings no longer carry a `github` prefix, and the former names are not acc
 
 `compose.yaml` also renames the secret `github_webhook_secret` to `webhook_secret`, so rename the files in `.secrets/` to match.
 
+The image moved from `ghcr.io/jlhg/hooked` to `ghcr.io/cldotdev/hooked`, and the former location no longer receives updates.
+
 To run the container as your host user with `HOST_UID` and `HOST_GID`, first give that user the files the root container already created, or hooked cannot open its log file and exits. With the stack stopped, run:
 
 ```txt
 sudo chown -R "$(id -u):$(id -g)" .srv/hooked /path/to/repo
 ```
+
+## Releasing
+
+1. Set `version` in `Cargo.toml` to the new version and run `cargo build` so that `Cargo.lock` follows, then commit.
+2. Push an annotated tag named after the version, without a `v` prefix (for example `0.4.0`). The annotation becomes the release notes.
+
+The release workflow fails if the tag differs from the `Cargo.toml` version. Otherwise it pushes the image as `ghcr.io/cldotdev/hooked:<version>` and `latest` and creates the GitHub Release. GHCR creates the package as private on its first push, so set its visibility to public once in the package settings.
 
 ## License
 
