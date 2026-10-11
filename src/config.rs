@@ -21,16 +21,18 @@ pub struct Config {
     #[arg(long, env)]
     pub build_entry_script_path: String,
 
-    /// The token to verify the incoming GitHub webhook messages. See
-    /// [Creating webhooks - GitHub
+    /// The secret token to verify incoming GitHub or Gitea webhook messages.
+    /// See [Creating webhooks - GitHub
     /// Docs](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks)
-    /// for creating a webhook and setting the secret token.
+    /// or [Webhooks - Gitea
+    /// Docs](https://docs.gitea.com/usage/webhooks) for creating a webhook and
+    /// setting the secret token.
     #[arg(long, env, value_parser = parse_secret_or_env)]
-    pub github_webhook_secret: String,
+    pub webhook_secret: String,
 
     /// The Git branch name to watch.
     #[arg(long, env)]
-    pub github_watch_push_branch: String,
+    pub watch_push_branch: String,
 
     /// The Discord webhook URL to send the notification to Discord
     /// channel. See [Intro to Webhooks –
@@ -83,8 +85,8 @@ mod tests {
         let mut args = vec![
             "hooked",
             "--build-entry-script-path=b.sh",
-            "--github-webhook-secret=s",
-            "--github-watch-push-branch=master",
+            "--webhook-secret=s",
+            "--watch-push-branch=master",
         ];
         args.extend_from_slice(extra);
         Config::try_parse_from(args).unwrap().normalized()
@@ -105,6 +107,30 @@ mod tests {
             parse(&[&format!("--discord-webhook-url={}", url)]).discord_webhook_url,
             Some(url.to_string())
         );
+    }
+
+    #[test]
+    fn new_flag_names_parse() {
+        let config = parse(&[]);
+        assert_eq!(config.webhook_secret, "s");
+        assert_eq!(config.watch_push_branch, "master");
+    }
+
+    #[test]
+    fn former_flag_names_are_rejected() {
+        for old in [
+            "--github-webhook-secret=s",
+            "--github-watch-push-branch=master",
+        ] {
+            let args = [
+                "hooked",
+                "--build-entry-script-path=b.sh",
+                "--webhook-secret=s",
+                "--watch-push-branch=master",
+                old,
+            ];
+            assert!(Config::try_parse_from(args).is_err(), "{old} accepted");
+        }
     }
 
     #[test]

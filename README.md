@@ -1,6 +1,6 @@
 # hooked
 
-A simple command-line CI/CD tool that triggers custom build and deployment commands when it receives the GitHub webhook messages. It also supports Discord notification (including the stdout and stderr outputs).
+A simple command-line CI/CD tool that triggers custom build and deployment commands when it receives push webhooks from GitHub or Gitea. It also supports Discord notification (including the stdout and stderr outputs).
 
 ## Screenshots
 
@@ -40,11 +40,14 @@ The available arguments are described below:
 - `-h, --host`: The domain or IP address where the server is hosted.
 - `-p, --port`: The port number where the server is listening.
 - `--build-entry-script-path`: Path to the build entry script.
-- `--github-webhook-secret`: The token to verify the incoming GitHub webhook messages. See [Creating webhooks - GitHub Docs](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks) for creating a webhook and setting the secret token.
-- `--github-watch-push-branch`: The Git branch name to watch.
+- `--webhook-secret`: The secret token to verify incoming webhook messages. See [Creating webhooks - GitHub Docs](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks) or [Webhooks - Gitea Docs](https://docs.gitea.com/usage/webhooks) for creating a webhook and setting the secret token.
+- `--watch-push-branch`: The Git branch name to watch.
 - `--discord-webhook-url`: The Discord webhook URL to send the notification to a Discord channel. See [Intro to Webhooks – Discord](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks) for creating a Discord webhook URL. Optional; when it is unset or empty, hooked only writes each build's commit ID and exit status to the log.
 
-Configure the Github Webhook. Set the payload URL to `<your-server-address>/webhooks/github`.
+Configure the webhook on the repository with the content type `application/json`, the same secret token, and the push event:
+
+- GitHub: set the payload URL to `<your-server-address>/webhooks/github`.
+- Gitea: add a webhook of the type "Gitea" and set the target URL to `<your-server-address>/webhooks/gitea`.
 
 Copy the example `build.sh` to the current directory. Open it and add whatever commands you want to execute. hooked passes the pushed commit ID as the first argument.
 
@@ -58,9 +61,36 @@ Finally, start the web server:
 
 ```txt
 hooked -h 0.0.0.0 -p 3000 --build-entry-script-path=./build.sh \
-  --github-webhook-secret=<string> --github-watch-push-branch=master \
+  --webhook-secret=<string> --watch-push-branch=master \
   --discord-webhook-url=<string>
 ```
+
+### Docker
+
+The image runs the build script with git configured for one host over HTTPS:
+
+- `GIT_HOST`: The git host the build script fetches from. Defaults to `github.com`. SSH remote URLs for this host are rewritten to HTTPS.
+- `/run/secrets/git_token`: An access token for `GIT_HOST`, provided as a Docker secret. Without it, git runs unauthenticated.
+
+This git setup applies only to processes started by hooked, so a shell opened with `docker exec` does not have it.
+
+See `compose.yaml` for a complete example.
+
+## Migration
+
+### Upgrading from 0.3.x
+
+The settings no longer carry a `github` prefix, and the former names are not accepted:
+
+| Former | Current |
+|--------|---------|
+| `--github-webhook-secret` | `--webhook-secret` |
+| `GITHUB_WEBHOOK_SECRET` | `WEBHOOK_SECRET` |
+| `--github-watch-push-branch` | `--watch-push-branch` |
+| `GITHUB_WATCH_PUSH_BRANCH` | `WATCH_PUSH_BRANCH` |
+| Docker secret `/run/secrets/github_pat` | Docker secret `/run/secrets/git_token` |
+
+`compose.yaml` also renames the secret `github_webhook_secret` to `webhook_secret`, so rename the files in `.secrets/` to match.
 
 ## License
 

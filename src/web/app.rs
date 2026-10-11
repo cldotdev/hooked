@@ -19,9 +19,10 @@ pub struct Context {
     pub build_tx: Arc<JobSender>,
 }
 
-fn new_router() -> Router {
+pub(crate) fn new_router() -> Router {
     Router::new()
-        .route("/webhooks/github", post(post_webhooks_github))
+        .route("/webhooks/github", post(post_webhooks))
+        .route("/webhooks/gitea", post(post_webhooks))
         .layer(CorsLayer::permissive())
 }
 

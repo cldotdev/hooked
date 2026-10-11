@@ -39,13 +39,14 @@ services:
       - HOOKED_HOST=0.0.0.0
       - HOOKED_PORT=3000
       - BUILD_ENTRY_SCRIPT_PATH=./build.sh
-      - GITHUB_WEBHOOK_SECRET=/run/secrets/github_webhook_secret
-      - GITHUB_WATCH_PUSH_BRANCH=
+      - WEBHOOK_SECRET=/run/secrets/webhook_secret
+      - WATCH_PUSH_BRANCH=
+      - GIT_HOST=github.com
       - DISCORD_WEBHOOK_URL=/run/secrets/discord_webhook_url
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
     secrets:
-      - github_webhook_secret
-      - github_pat
+      - webhook_secret
+      - git_token
       - discord_webhook_url
     networks:
       - default
@@ -61,10 +62,10 @@ networks:
   docker-proxy:
 
 secrets:
-  github_webhook_secret:
-    file: ./.secrets/github_webhook_secret
-  github_pat:
-    file: ./.secrets/github_pat
+  webhook_secret:
+    file: ./.secrets/webhook_secret
+  git_token:
+    file: ./.secrets/git_token
   discord_webhook_url:
     file: ./.secrets/discord_webhook_url
   cf_tunnel_token:
