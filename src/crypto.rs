@@ -1,6 +1,6 @@
 use anyhow::Result;
 use hex::decode_to_slice;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 pub fn verify_signature(secret: &[u8], message: &[u8], signature: &[u8]) -> Result<bool> {

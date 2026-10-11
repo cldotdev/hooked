@@ -58,9 +58,6 @@ pub enum HttpError<'a> {
     NotFound(&'a str),
 
     #[error("The server encountered an unexpected error")]
-    Sqlx(#[from] sqlx::Error),
-
-    #[error("The server encountered an unexpected error")]
     Anyhow(#[from] anyhow::Error),
 
     #[error("The server encountered an unexpected error")]
@@ -76,7 +73,7 @@ impl HttpError<'_> {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::Sqlx(_) | Self::Anyhow(_) | Self::StdIOError(_) | Self::InvalidHeaderValue(_) => {
+            Self::Anyhow(_) | Self::StdIOError(_) | Self::InvalidHeaderValue(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         }
@@ -85,16 +82,8 @@ impl HttpError<'_> {
 
 impl IntoResponse for HttpError<'_> {
     fn into_response(self) -> Response {
-        match self {
-            Self::Sqlx(ref e) => {
-                error!("SQLx error: {:?}", e);
-            }
-
-            Self::Anyhow(ref e) => {
-                error!("Generic error: {:?}", e);
-            }
-
-            _ => (),
+        if let Self::Anyhow(ref e) = self {
+            error!("Generic error: {:?}", e);
         }
 
         (

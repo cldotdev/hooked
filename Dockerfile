@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM rust:1.90-alpine AS build
+FROM rust:1.99.0-alpine AS build
 WORKDIR /app
-RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static pkgconfig
+RUN apk add --no-cache musl-dev
 COPY . /app
 RUN cargo install --locked --path .
 
