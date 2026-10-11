@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::web::handler::webhook::*;
+use crate::web::worker::{spawn_worker, JobSender};
 use anyhow::Result;
 use axum::{extract::Extension, routing::post, Router};
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use tracing::Level;
 #[derive(Clone)]
 pub struct Context {
     pub config: Arc<Config>,
+    pub build_tx: Arc<JobSender>,
 }
 
 fn new_router() -> Router {
@@ -25,8 +27,13 @@ fn new_router() -> Router {
 
 pub async fn start_server(config: Config) -> Result<()> {
     let bind_addr = config.bind_addr();
+    let build_tx = spawn_worker(
+        config.build_entry_script_path.clone(),
+        config.discord_webhook_url.clone(),
+    );
     let ctx = Context {
         config: Arc::new(config),
+        build_tx: Arc::new(build_tx),
     };
 
     let r = new_router().layer(
