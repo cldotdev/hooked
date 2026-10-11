@@ -9,7 +9,8 @@ FROM docker:latest
 RUN apk add --no-cache git
 COPY --from=build /usr/local/cargo/bin/hooked /usr/local/bin/hooked
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh && mkdir -p /home/hooked && chmod 1777 /home/hooked
+ENV HOME=/home/hooked
 WORKDIR /app
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["hooked"]

@@ -27,6 +27,7 @@ services:
   hooked:
     image: ghcr.io/jlhg/hooked:latest
     restart: unless-stopped
+    user: "${HOST_UID:-0}:${HOST_GID:-0}"
     depends_on:
       - docker-socket-proxy
     volumes:

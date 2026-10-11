@@ -74,6 +74,15 @@ The image runs the build script with git configured for one host over HTTPS:
 
 This git setup applies only to processes started by hooked, so a shell opened with `docker exec` does not have it.
 
+The container runs as root by default, so files that hooked and the build script write into bind mounts, such as the log file and the repository checkout, end up owned by root on the host. To run it as your host user instead, set the IDs in a `.env` file next to `compose.yaml`; the `hooked` service passes them to `user:`:
+
+```txt
+HOST_UID=1000
+HOST_GID=1000
+```
+
+Use the output of `id -u` and `id -g`. Bash's own `UID` variable is not exported, so compose cannot read it.
+
 See `compose.yaml` for a complete example.
 
 ## Migration
@@ -91,6 +100,12 @@ The settings no longer carry a `github` prefix, and the former names are not acc
 | Docker secret `/run/secrets/github_pat` | Docker secret `/run/secrets/git_token` |
 
 `compose.yaml` also renames the secret `github_webhook_secret` to `webhook_secret`, so rename the files in `.secrets/` to match.
+
+To run the container as your host user with `HOST_UID` and `HOST_GID`, first give that user the files the root container already created, or hooked cannot open its log file and exits. With the stack stopped, run:
+
+```txt
+sudo chown -R "$(id -u):$(id -g)" .srv/hooked /path/to/repo
+```
 
 ## License
 
