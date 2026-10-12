@@ -4,8 +4,8 @@ A simple command-line CI/CD tool that triggers custom build and deployment comma
 
 ## Screenshots
 
-![](doc/screenshot/github_webhook.png)
-![](doc/screenshot/discord_notification.png)
+![GitHub webhook delivery accepted by hooked](doc/screenshot/github_webhook.png)
+![Discord notification](doc/screenshot/discord_notification.png)
 
 ## Installation
 
