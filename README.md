@@ -101,8 +101,6 @@ The settings no longer carry a `github` prefix, and the former names are not acc
 
 `compose.yaml` also renames the secret `github_webhook_secret` to `webhook_secret`, so rename the files in `.secrets/` to match.
 
-The image moved from `ghcr.io/jlhg/hooked` to `ghcr.io/cldotdev/hooked`, and the former location no longer receives updates.
-
 To run the container as your host user with `HOST_UID` and `HOST_GID`, first give that user the files the root container already created, or hooked cannot open its log file and exits. With the stack stopped, run:
 
 ```txt
