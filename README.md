@@ -67,10 +67,12 @@ hooked -h 0.0.0.0 -p 3000 --build-entry-script-path=./build.sh \
 
 ### Docker
 
-The image runs the build script with git configured for one host over HTTPS:
+The image runs the build script with git configured for one base URL over HTTP or HTTPS:
 
-- `GIT_HOST`: The git host the build script fetches from. Defaults to `github.com`. SSH remote URLs for this host are rewritten to HTTPS.
-- `/run/secrets/git_token`: An access token for `GIT_HOST`, provided as a Docker secret. Without it, git runs unauthenticated.
+- `GIT_URL`: The base URL the build script fetches from: `http` or `https`, a host, an optional port, and an optional path (for example `https://git.example.com` or `http://server:3000`). Defaults to `https://<GIT_HOST>`. Any other scheme makes the container print an error and exit. The resolved value, without a trailing slash, is exported to the build script, so the script can build repository URLs as `"$GIT_URL/<owner>/<repo>.git"`. Use `http` only on an internal network you trust, because the token is then sent in cleartext.
+- `GIT_HOST`: A shorthand for `GIT_URL=https://<GIT_HOST>`. Defaults to `github.com`. `GIT_URL` takes precedence when both are set.
+- `GIT_SSH_HOST`: The host, with an optional `:port`, whose SSH remotes (`ssh://git@<host>/`, `git+ssh://git@<host>/`, and `git@<host>:`) are rewritten to `GIT_URL`. Defaults to the host of `GIT_URL` without its port. Set it when the SSH domain differs from the web domain, for example `git-ssh.example.com` for `GIT_URL=https://git.example.com`. The SCP-style form `git@<host>:` cannot carry a port, so it matches the host alone. Only the `git` SSH user and non-IPv6 hosts are supported.
+- `/run/secrets/git_token`: An access token for `GIT_URL`, provided as a Docker secret and stored for its scheme, host, and port. Without it, git runs unauthenticated.
 
 This git setup applies only to processes started by hooked, so a shell opened with `docker exec` does not have it.
 
@@ -96,7 +98,7 @@ See `compose.yaml` for a complete example. Released images are published as `ghc
 
 The pieces fit together as follows:
 
-- `build.sh`: copy it as the build script. Set the repository URL, Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_HOST`.
+- `build.sh`: copy it as the build script. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
 - `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script.
 - `nginx.conf`: serves `/srv/site/current`. nginx resolves the symlink on each request, so a new release needs no reload.
 

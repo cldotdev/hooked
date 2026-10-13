@@ -6,8 +6,8 @@ set -ex
 
 commit_id=$1
 
-# Fetched with the credentials the entrypoint sets up for GIT_HOST.
-repo_url="https://github.com/<owner>/<repo>.git"
+# GIT_URL is the base URL the entrypoint sets up credentials for.
+repo_url="$GIT_URL/<owner>/<repo>.git"
 branch=$WATCH_PUSH_BRANCH
 hugo_image=ghcr.io/gohugoio/hugo:v0.167.0
 # Mounted at the same paths in this container, because `docker run -v` takes

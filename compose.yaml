@@ -19,6 +19,8 @@ services:
       - WEBHOOK_SECRET=/run/secrets/webhook_secret
       - WATCH_PUSH_BRANCH=
       - GIT_HOST=github.com
+      # - GIT_URL=https://git.example.com
+      # - GIT_SSH_HOST=git-ssh.example.com
       - DISCORD_WEBHOOK_URL=/run/secrets/discord_webhook_url
     secrets:
       - webhook_secret
