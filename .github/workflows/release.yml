@@ -27,6 +27,21 @@ jobs:
             exit 1
           fi
 
+      # Only the highest version takes `latest`, for the image and the
+      # release alike. Otherwise tags pushed together race for it, and a fix
+      # released for an older line would take it from a newer one.
+      - name: Check whether the tag is the highest version
+        id: latest
+        run: |
+          highest="$(git ls-remote --tags --refs origin \
+            | sed -n 's|.*refs/tags/\([0-9]\+\.[0-9]\+\.[0-9]\+\)$|\1|p' \
+            | sort -V | tail -n 1)"
+          if [ "$GITHUB_REF_NAME" = "$highest" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
@@ -42,6 +57,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: type=semver,pattern={{version}}
+          flavor: latest=${{ steps.latest.outputs.value }}
 
       - uses: docker/build-push-action@v7
         with:
@@ -63,8 +79,9 @@ jobs:
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ steps.latest.outputs.value }}
         run: |
           git fetch --force origin \
             "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           gh release create "$GITHUB_REF_NAME" --verify-tag \
-            --notes-from-tag --title "$GITHUB_REF_NAME"
+            --notes-from-tag --title "$GITHUB_REF_NAME" --latest="$LATEST"
