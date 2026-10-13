@@ -1,32 +1,4 @@
 #!/bin/sh
-# Docker operations and required docker-socket-proxy permissions:
-#
-# docker compose build:
-#   - BUILD=1        # Allow building images
-#   - IMAGES=1       # Allow listing and managing images
-#   - NETWORKS=1     # Allow network operations during build
-#   - VOLUMES=1      # Allow volume operations during build
-#
-# docker compose down:
-#   - CONTAINERS=1   # Allow stopping and removing containers
-#   - NETWORKS=1     # Allow removing networks
-#   - VOLUMES=1      # Allow removing volumes
-#   - SERVICES=1     # Allow compose service management
-#
-# docker compose up -d:
-#   - CONTAINERS=1   # Allow creating and starting containers
-#   - IMAGES=1       # Allow pulling images
-#   - NETWORKS=1     # Allow creating networks
-#   - VOLUMES=1      # Allow creating volumes
-#   - SERVICES=1     # Allow compose service management
-#   - POST=1         # Allow POST requests (create operations)
-#
-# docker builder prune -f:
-#   - BUILDER=1      # Allow managing builder and build cache
-#
-# docker image prune -f:
-#   - IMAGES=1       # Allow listing and deleting images
-#   - POST=1         # Allow POST requests (delete operations)
 set -ex
 
 commit_id=$1
@@ -36,7 +8,22 @@ commit_id=$1
 # cd /path/to/repo
 # git fetch
 # git checkout $commit_id
-# docker compose --progress plain build
-# docker compose up -d --force-recreate
-# docker builder prune -f
-# docker image prune -f
+#
+# # The script's stdout and stderr go to Discord and the log, so turn tracing
+# # off around anything that expands a secret.
+# set +x
+# api_key=$(cat /run/secrets/api_key)
+# set -x
+#
+# # Only services whose configuration or image changed are recreated, so
+# # unchanged ones, such as a tunnel, keep their connections.
+# docker compose --progress plain up -d --build
+#
+# # The builder's default cache limit scales with the disk size, and an
+# # unbounded prune also drops base image layers, so every build pulls them
+# # again. Keep the cache under a fixed size instead.
+# docker builder prune -f --max-used-space 10GB
+#
+# # Only dangling images that compose built for this project; an unfiltered
+# # prune removes those of every stack on the host.
+# docker image prune -f --filter label=com.docker.compose.project=<name>

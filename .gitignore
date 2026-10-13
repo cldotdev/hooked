@@ -9,3 +9,4 @@ compose.*.yaml
 compose.*.yml
 /.secrets/
 /.srv/
+/.env

@@ -1,0 +1,46 @@
+services:
+  hooked:
+    image: ghcr.io/cldotdev/hooked:latest
+    restart: unless-stopped
+    user: "${HOST_UID:-0}:${HOST_GID:-0}"
+    group_add:
+      - "${DOCKER_GID:?set DOCKER_GID in .env to the host docker group ID}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.srv/hooked/:/app/
+      # build.sh passes these paths to `docker run -v`, so they must be the
+      # same absolute paths on the host and in the container. Keep them under
+      # the base_dir set in build.sh.
+      - /path/to/site/.srv/build/:/path/to/site/.srv/build/
+      - /path/to/site/.srv/site/:/path/to/site/.srv/site/
+    expose:
+      - 3000
+    environment:
+      - LOG_FILE_PATH=log/app.log
+      - HOOKED_HOST=0.0.0.0
+      - HOOKED_PORT=3000
+      - BUILD_ENTRY_SCRIPT_PATH=./build.sh
+      - WEBHOOK_SECRET=/run/secrets/webhook_secret
+      - WATCH_PUSH_BRANCH=main
+      - GIT_HOST=github.com
+      - DISCORD_WEBHOOK_URL=/run/secrets/discord_webhook_url
+    secrets:
+      - webhook_secret
+      - git_token
+      - discord_webhook_url
+  web:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./.srv/site/:/srv/site/:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:8080:80"
+
+secrets:
+  webhook_secret:
+    file: ./.secrets/webhook_secret
+  git_token:
+    file: ./.secrets/git_token
+  discord_webhook_url:
+    file: ./.secrets/discord_webhook_url

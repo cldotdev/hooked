@@ -74,18 +74,45 @@ The image runs the build script with git configured for one host over HTTPS:
 
 This git setup applies only to processes started by hooked, so a shell opened with `docker exec` does not have it.
 
-The container runs as root by default, so files that hooked and the build script write into bind mounts, such as the log file and the repository checkout, end up owned by root on the host. To run it as your host user instead, set the IDs in a `.env` file next to `compose.yaml`; the `hooked` service passes them to `user:`:
+The container talks to the host Docker daemon through the mounted `/var/run/docker.sock`, and `compose.yaml` adds the host docker group to the container with `group_add`. Copy `.env.example` to `.env` next to `compose.yaml` and set `DOCKER_GID` to the host docker group ID (`getent group docker | cut -d: -f3`). `DOCKER_GID` is required even when the container runs as root, and `docker compose` refuses to start without it.
+
+**Security**: through the socket, hooked, the build script, and anything the build script runs from the repository (such as a compose file or a Dockerfile) have root on the host. Whoever can push to the watched branch controls the host. To keep repository content away from the host, make the build script treat the repository as data only; see [Static Site Example](#static-site-example).
+
+The container runs as root by default, so files that hooked and the build script write into bind mounts, such as the log file and the repository checkout, end up owned by root on the host. To run it as your host user instead, uncomment `HOST_UID` and `HOST_GID` in `.env` (the output of `id -u` and `id -g`); the `hooked` service passes them to `user:`. Bash's own `UID` variable is not exported, so compose cannot read it. Before the first start, create `.srv/hooked/` as that user. Otherwise Docker creates it as root, and hooked cannot open its log file and exits:
 
 ```txt
-HOST_UID=1000
-HOST_GID=1000
+mkdir -p .srv/hooked
 ```
 
-Use the output of `id -u` and `id -g`. Bash's own `UID` variable is not exported, so compose cannot read it.
+hooked runs the build script directly, so it needs the executable bit: `chmod +x .srv/hooked/build.sh`.
+
+Mount a repository at the same absolute path inside the container as on the host (`/path/to/repo/:/path/to/repo/`). When the build script runs `docker compose`, compose resolves relative bind and secret paths on the client side and the host daemon mounts the result, so a repository mounted at a different path produces mount sources that do not exist on the host, and secret mounts fail.
 
 See `compose.yaml` for a complete example. Released images are published as `ghcr.io/cldotdev/hooked`.
 
+### Static Site Example
+
+`example/static-site/` deploys a Hugo site so that the repository supplies only the site source. `build.sh` fetches the branch into a bare repository, exports the pushed commit with `git archive` so `.git` and untracked files never reach the build, and builds it in a throwaway Hugo container with no network, a read-only root filesystem, and only the source (read-only) and the release directory mounted. A malicious push can change the site's pages but cannot reach the host. The script then swaps the `current` symlink atomically and keeps the newest `keep_releases` releases.
+
+The pieces fit together as follows:
+
+- `build.sh`: copy it as the build script. Set the repository URL, Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_HOST`.
+- `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script.
+- `nginx.conf`: serves `/srv/site/current`. nginx resolves the symlink on each request, so a new release needs no reload.
+
+The build and site directories must be writable by the user hooked runs as.
+
 ## Migration
+
+### Upgrading from 0.4.x
+
+`compose.yaml` no longer uses `tecnativa/docker-socket-proxy`. Its filter matches only the request path and method, so an allowed `POST /containers/create` can still start a privileged container that mounts the host root, and `EXEC=1` reaches any container. It also broke buildx: the requests buildx makes (`POST /grpc`, `GET /v1.47/info`) fail through the proxy, so buildx switched to the `docker-container` driver and created a privileged `buildx_buildkit_default` container with its state volume and the `moby/buildkit:buildx-stable-1` image on the host. The hooked service now mounts the host socket directly.
+
+1. Set `DOCKER_GID` in `.env`; see `.env.example`.
+2. Update `compose.yaml`, keeping your local edits: remove the proxy service, the `docker-proxy` network, `depends_on`, and `DOCKER_HOST`, and add the socket mount and `group_add`. If you mount a repository, use the same path inside the container as on the host.
+3. Run `docker compose up -d --remove-orphans` to remove the old proxy container.
+4. If the host built through the proxy, remove the buildx leftovers with `docker rm -f buildx_buildkit_default`, `docker volume rm buildx_buildkit_default_state`, and `docker image rm moby/buildkit:buildx-stable-1`. The builder that created them was recorded only inside the old hooked container, so `docker buildx rm` on the host does not know about it. They do not exist on other hosts.
+5. In your build script, consider the changes in `example/build.sh`: drop `--force-recreate`, bound `docker builder prune` with `--max-used-space`, and scope `docker image prune` with `--filter label=com.docker.compose.project=<name>`.
 
 ### Upgrading from 0.3.x
 

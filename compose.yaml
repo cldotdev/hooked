@@ -1,38 +1,14 @@
 services:
-  docker-socket-proxy:
-    image: tecnativa/docker-socket-proxy:latest
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - CONTAINERS=1
-      - IMAGES=1
-      - AUTH=1
-      - PING=1
-      - VERSION=1
-      - BUILD=1
-      - BUILDER=1
-      - COMMIT=1
-      - EXEC=1
-      - LOGS=1
-      - NETWORKS=1
-      - VOLUMES=1
-      - SERVICES=1
-      - TASKS=1
-      - POST=1
-    expose:
-      - 2375
-    networks:
-      - docker-proxy
   hooked:
     image: ghcr.io/cldotdev/hooked:latest
     restart: unless-stopped
     user: "${HOST_UID:-0}:${HOST_GID:-0}"
-    depends_on:
-      - docker-socket-proxy
+    group_add:
+      - "${DOCKER_GID:?set DOCKER_GID in .env to the host docker group ID}"
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./.srv/hooked/:/app/
-      # - /path/to/repo/:/repo/
+      # - /path/to/repo/:/path/to/repo/
     expose:
       - 3000
     environment:
@@ -44,23 +20,16 @@ services:
       - WATCH_PUSH_BRANCH=
       - GIT_HOST=github.com
       - DISCORD_WEBHOOK_URL=/run/secrets/discord_webhook_url
-      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     secrets:
       - webhook_secret
       - git_token
       - discord_webhook_url
-    networks:
-      - default
-      - docker-proxy
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token-file /run/secrets/cf_tunnel_token
     secrets:
       - cf_tunnel_token
-
-networks:
-  docker-proxy:
 
 secrets:
   webhook_secret:
