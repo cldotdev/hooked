@@ -49,11 +49,7 @@ Configure the webhook on the repository with the content type `application/json`
 - GitHub: set the payload URL to `<your-server-address>/webhooks/github`.
 - Gitea: add a webhook of the type "Gitea" and set the target URL to `<your-server-address>/webhooks/gitea`.
 
-Copy the example `build.sh` to the current directory. Open it and add whatever commands you want to execute. hooked passes the pushed commit ID as the first argument.
-
-```txt
-cp example/build.sh .
-```
+Write a build script with the commands to run on each push, and make it executable. hooked passes the pushed commit ID as the first argument and sends the script's stdout and stderr to Discord. If the script traces commands with `set -x`, turn tracing off with `set +x` around any command that expands a secret. See [Static Site Example](#static-site-example) for a complete script.
 
 Builds run one at a time. If several pushes arrive while a build is running, hooked builds only the newest of them after the current build finishes and skips the rest.
 
@@ -76,7 +72,7 @@ The image runs the build script with git configured for one base URL over HTTP o
 
 This git setup applies only to processes started by hooked, so a shell opened with `docker exec` does not have it.
 
-The container talks to the host Docker daemon through the mounted `/var/run/docker.sock`, and `compose.yaml` adds the host docker group to the container with `group_add`. Copy `.env.example` to `.env` next to `compose.yaml` and set `DOCKER_GID` to the host docker group ID (`getent group docker | cut -d: -f3`). `DOCKER_GID` is required even when the container runs as root, and `docker compose` refuses to start without it.
+The container talks to the host Docker daemon through the mounted `/var/run/docker.sock`, and `example/static-site/compose.yaml` adds the host docker group to the container with `group_add`. Copy `.env.example` from the same directory to `.env` next to your `compose.yaml` and set `DOCKER_GID` to the host docker group ID (`getent group docker | cut -d: -f3`). `DOCKER_GID` is required even when the container runs as root, and `docker compose` refuses to start without it.
 
 **Security**: through the socket, hooked, the build script, and anything the build script runs from the repository (such as a compose file or a Dockerfile) have root on the host. Whoever can push to the watched branch controls the host. To keep repository content away from the host, make the build script treat the repository as data only; see [Static Site Example](#static-site-example).
 
@@ -88,9 +84,7 @@ mkdir -p .srv/hooked
 
 hooked runs the build script directly, so it needs the executable bit: `chmod +x .srv/hooked/build.sh`.
 
-Mount a repository at the same absolute path inside the container as on the host (`/path/to/repo/:/path/to/repo/`). When the build script runs `docker compose`, compose resolves relative bind and secret paths on the client side and the host daemon mounts the result, so a repository mounted at a different path produces mount sources that do not exist on the host, and secret mounts fail.
-
-See `compose.yaml` for a complete example. Released images are published as `ghcr.io/cldotdev/hooked`.
+See [Static Site Example](#static-site-example) for a complete setup. Released images are published as `ghcr.io/cldotdev/hooked`.
 
 ### Static Site Example
 
@@ -101,6 +95,7 @@ The pieces fit together as follows:
 - `build.sh`: copy it as the build script. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
 - `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script.
 - `nginx.conf`: serves `/srv/site/current`. nginx resolves the symlink on each request, so a new release needs no reload.
+- `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker](#docker).
 
 The build and site directories must be writable by the user hooked runs as.
 
@@ -110,11 +105,11 @@ The build and site directories must be writable by the user hooked runs as.
 
 `compose.yaml` no longer uses `tecnativa/docker-socket-proxy`. Its filter matches only the request path and method, so an allowed `POST /containers/create` can still start a privileged container that mounts the host root, and `EXEC=1` reaches any container. It also broke buildx: the requests buildx makes (`POST /grpc`, `GET /v1.47/info`) fail through the proxy, so buildx switched to the `docker-container` driver and created a privileged `buildx_buildkit_default` container with its state volume and the `moby/buildkit:buildx-stable-1` image on the host. The hooked service now mounts the host socket directly.
 
-1. Set `DOCKER_GID` in `.env`; see `.env.example`.
+1. Set `DOCKER_GID` in `.env`; see `example/static-site/.env.example`.
 2. Update `compose.yaml`, keeping your local edits: remove the proxy service, the `docker-proxy` network, `depends_on`, and `DOCKER_HOST`, and add the socket mount and `group_add`. If you mount a repository, use the same path inside the container as on the host.
 3. Run `docker compose up -d --remove-orphans` to remove the old proxy container.
 4. If the host built through the proxy, remove the buildx leftovers with `docker rm -f buildx_buildkit_default`, `docker volume rm buildx_buildkit_default_state`, and `docker image rm moby/buildkit:buildx-stable-1`. The builder that created them was recorded only inside the old hooked container, so `docker buildx rm` on the host does not know about it. They do not exist on other hosts.
-5. In your build script, consider the changes in `example/build.sh`: drop `--force-recreate`, bound `docker builder prune` with `--max-used-space`, and scope `docker image prune` with `--filter label=com.docker.compose.project=<name>`.
+5. In your build script, drop `--force-recreate`, bound `docker builder prune` with `--max-used-space`, and scope `docker image prune` with `--filter label=com.docker.compose.project=<name>`.
 
 ### Upgrading from 0.3.x
 
