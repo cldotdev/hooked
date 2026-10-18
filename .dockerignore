@@ -1,5 +1,7 @@
-/target/
-/log/
-/.srv/
-/.secrets/
-/.env
+# Send only what the Dockerfile uses, so secrets and local files never reach
+# the build context and doc changes do not invalidate the Rust build.
+*
+!/src/
+!/Cargo.toml
+!/Cargo.lock
+!/entrypoint.sh
