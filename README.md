@@ -49,7 +49,7 @@ Configure the webhook on the repository with the content type `application/json`
 - GitHub: set the payload URL to `<your-server-address>/webhooks/github`.
 - Gitea: add a webhook of the type "Gitea" and set the target URL to `<your-server-address>/webhooks/gitea`.
 
-Write a build script with the commands to run on each push, and make it executable. hooked passes the pushed commit ID as the first argument and sends the script's stdout and stderr to Discord. If the script traces commands with `set -x`, turn tracing off with `set +x` around any command that expands a secret. See [Static Site Example](#static-site-example) for a complete script.
+Write a build script with the commands to run on each push, and make it executable. hooked passes the pushed commit ID as the first argument and sends the script's stdout and stderr to Discord. If the script traces commands with `set -x`, turn tracing off with `set +x` around any command that expands a secret. See [Static Site Example](#static-site-example) or [Docker App Example](#docker-app-example) for a complete script.
 
 Builds run one at a time. If several pushes arrive while a build is running, hooked builds only the newest of them after the current build finishes and skips the rest.
 
@@ -72,9 +72,9 @@ The image runs the build script with git configured for one base URL over HTTP o
 
 This git setup applies only to processes started by hooked, so a shell opened with `docker exec` does not have it.
 
-The container talks to the host Docker daemon through the mounted `/var/run/docker.sock`, and `example/static-site/compose.yaml` adds the host docker group to the container with `group_add`. Copy `.env.example` from the same directory to `.env` next to your `compose.yaml` and set `DOCKER_GID` to the host docker group ID (`getent group docker | cut -d: -f3`). `DOCKER_GID` is required even when the container runs as root, and `docker compose` refuses to start without it.
+The container talks to the host Docker daemon through the mounted `/var/run/docker.sock`, and the `compose.yaml` files under `example/` add the host docker group to the container with `group_add`. Copy `.env.example` from the same example directory to `.env` next to your `compose.yaml` and set `DOCKER_GID` to the host docker group ID (`getent group docker | cut -d: -f3`). `DOCKER_GID` is required even when the container runs as root, and `docker compose` refuses to start without it.
 
-**Security**: through the socket, hooked, the build script, and anything the build script runs from the repository (such as a compose file or a Dockerfile) have root on the host. Whoever can push to the watched branch controls the host. To keep repository content away from the host, make the build script treat the repository as data only; see [Static Site Example](#static-site-example).
+**Security**: through the socket, hooked, the build script, and anything the build script runs from the repository (such as a compose file) have root on the host. Whoever can push to the watched branch controls the host unless the build script treats the repository as data only. Building a repository Dockerfile does not give host root under the conditions listed in [Docker App Example](#docker-app-example). See that section and [Static Site Example](#static-site-example) for two ways to keep repository content away from the host.
 
 The container runs as root by default, so files that hooked and the build script write into bind mounts, such as the log file and the repository checkout, end up owned by root on the host. To run it as your host user instead, uncomment `HOST_UID` and `HOST_GID` in `.env` (the output of `id -u` and `id -g`); the `hooked` service passes them to `user:`. Bash's own `UID` variable is not exported, so compose cannot read it. Before the first start, create `.srv/hooked/` as that user. Otherwise Docker creates it as root, and hooked cannot open its log file and exits:
 
@@ -84,20 +84,7 @@ mkdir -p .srv/hooked
 
 hooked runs the build script directly, so it needs the executable bit: `chmod +x .srv/hooked/build.sh`.
 
-See [Static Site Example](#static-site-example) for a complete setup. Released images are published as `ghcr.io/cldotdev/hooked`.
-
-### Static Site Example
-
-`example/static-site/` deploys a Hugo site so that the repository supplies only the site source. `build.sh` fetches the branch into a bare repository, exports the pushed commit with `git archive` so `.git` and untracked files never reach the build, and builds it in a throwaway Hugo container with no network, a read-only root filesystem, and only the source (read-only) and the release directory mounted. A malicious push can change the site's pages but cannot reach the host. The script then swaps the `current` symlink atomically and keeps the newest `keep_releases` releases.
-
-The pieces fit together as follows:
-
-- `build.sh`: copy it as the build script. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
-- `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script. The `cloudflared` service connects a Cloudflare Tunnel using the token in `.secrets/cf_tunnel_token`; route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://web:80` for the site.
-- `nginx.conf`: serves `/srv/site/current`. nginx resolves the symlink on each request, so a new release needs no reload.
-- `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker](#docker).
-
-The build and site directories must be writable by the user hooked runs as.
+See [Static Site Example](#static-site-example) or [Docker App Example](#docker-app-example) for a complete setup. Both examples include a `cloudflared` service that connects a Cloudflare Tunnel using the token in `.secrets/cf_tunnel_token`. Released images are published as `ghcr.io/cldotdev/hooked`.
 
 The `cloudflared` service uses the `latest` image with `pull_policy: always`, so each `docker compose up -d` pulls the newest release; a container restart does not. The replaced image stays on the host without a tag, so remove it after the update:
 
@@ -106,13 +93,58 @@ docker compose up -d
 docker image prune -f --filter label=org.opencontainers.image.source=https://github.com/cloudflare/cloudflared
 ```
 
+### Static Site Example
+
+`example/static-site/` deploys a Hugo site so that the repository supplies only the site source. `build.sh` fetches the branch into a bare repository, exports the pushed commit with `git archive` so `.git` and untracked files never reach the build, and builds it in a throwaway Hugo container with no network, a read-only root filesystem, and only the source (read-only) and the release directory mounted. A malicious push can change the site's pages but cannot reach the host. The script then swaps the `current` symlink atomically and keeps the newest `keep_releases` releases.
+
+The pieces fit together as follows:
+
+- `build.sh`: copy it as the build script. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
+- `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script. The `cloudflared` service connects the tunnel; route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://web:80` for the site.
+- `nginx.conf`: serves `/srv/site/current`. nginx resolves the symlink on each request, so a new release needs no reload.
+- `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker](#docker).
+
+The build and site directories must be writable by the user hooked runs as.
+
+### Docker App Example
+
+`example/docker-app/` deploys a long-running app so that the repository supplies only a Dockerfile and source, while the host owns all runtime configuration. `build.sh` fetches the branch into a bare repository, exports the pushed commit with `git archive` into a fixed source directory, and runs `docker compose up -d --build` on a compose file that lives on the host. A malicious push can change what the build runs but cannot grant it host access. The script then prunes the daemon-wide build cache and the project's untagged images.
+
+The pieces fit together as follows:
+
+- `build.sh`: copy it as the build script. Set the repository path (appended to `GIT_URL`) and `deploy_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The script reads the compose project name from `app/compose.yaml`, so the name is set in one place.
+- `compose.yaml`: the deploy project with the `hooked` and `cloudflared` services. The `hooked` service mounts the deploy directory at the same absolute path as on the host, because `docker compose` runs in the hooked container, where it resolves any bind mounts and secret files in `app/compose.yaml`. This path must match `deploy_dir` in `build.sh`. Route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://app:<port>` for the app.
+- `app/compose.yaml`: the app as a separate compose project, so that `up` can never recreate the hooked container that is running the build. Its `build.context` is the exported source, relative to this file. Hardening options and `build.network: none` are commented out because they can break an app.
+- `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker](#docker).
+
+The deploy directory must be writable by the user hooked runs as, because `build.sh` replaces `src/` in it on each build.
+
+The app and `cloudflared` are in different projects, so they share a network named `my-app-tunnel`; give it a name unique on the host. The deploy project defines it and attaches only `cloudflared` to it, and `app/compose.yaml` joins it as external. hooked stays off it, so the app cannot reach hooked directly. Start the deploy project first, because it creates the network. Rollback is a `git revert` and a push; the image is rebuilt under the same name and not tagged per commit.
+
+The build context does not need the same path on the host and in the container: `docker compose build` streams it to the daemon, and a relative `build.context` resolves against the directory of the compose file. Only bind mounts and secret files in `app/compose.yaml` need matching paths.
+
+On Docker 29.7.2 with the default builder and no `daemon.json`, tests with host-controlled build flags showed that a repository Dockerfile could not reach host root:
+
+- BuildKit rejected `RUN --security=insecure` and `RUN --network=host` as not allowed.
+- `RUN` steps had default capabilities (mounting was denied) and no `docker.sock`.
+- Symlinks and `../` paths could not reach host files, and a bind mount of `/` saw only the build context.
+- Secret and SSH mounts failed unless the build passed them.
+
+This has limits, and only the default Dockerfile frontend was tested:
+
+- It holds only while the daemon does not enable the `security.insecure` or `network.host` entitlements and the build command does not pass `--allow`.
+- The build has network access, including to services the host exposes on the bridge network. `build.network: none` closes this at the cost of dependency downloads.
+- `RUN --mount=type=cache` mounts are shared across builds on the same daemon by default, so an untrusted build can poison a cache that another project uses.
+- The running app gets whatever secrets, volumes, and networks `app/compose.yaml` grants it.
+- A build can exhaust disk or CPU. The prune commands only partly bound this.
+
 ## Migration
 
 ### Upgrading from 0.4.x
 
 `compose.yaml` no longer uses `tecnativa/docker-socket-proxy`. Its filter matches only the request path and method, so an allowed `POST /containers/create` can still start a privileged container that mounts the host root, and `EXEC=1` reaches any container. It also broke buildx: the requests buildx makes (`POST /grpc`, `GET /v1.47/info`) fail through the proxy, so buildx switched to the `docker-container` driver and created a privileged `buildx_buildkit_default` container with its state volume and the `moby/buildkit:buildx-stable-1` image on the host. The hooked service now mounts the host socket directly.
 
-1. Set `DOCKER_GID` in `.env`; see `example/static-site/.env.example`.
+1. Set `DOCKER_GID` in `.env`; see `.env.example` in either example directory.
 2. Update `compose.yaml`, keeping your local edits: remove the proxy service, the `docker-proxy` network, `depends_on`, and `DOCKER_HOST`, and add the socket mount and `group_add`. If you mount a repository, use the same path inside the container as on the host.
 3. Run `docker compose up -d --remove-orphans` to remove the old proxy container.
 4. If the host built through the proxy, remove the buildx leftovers with `docker rm -f buildx_buildkit_default`, `docker volume rm buildx_buildkit_default_state`, and `docker image rm moby/buildkit:buildx-stable-1`. The builder that created them was recorded only inside the old hooked container, so `docker buildx rm` on the host does not know about it. They do not exist on other hosts.

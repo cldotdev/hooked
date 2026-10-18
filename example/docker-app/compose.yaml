@@ -1,0 +1,58 @@
+services:
+  hooked:
+    image: ghcr.io/cldotdev/hooked:latest
+    restart: unless-stopped
+    user: "${HOST_UID:-0}:${HOST_GID:-0}"
+    group_add:
+      - "${DOCKER_GID:?set DOCKER_GID in .env to the host docker group ID}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.srv/hooked/:/app/
+      # `docker compose` resolves the bind mounts and secret files of
+      # app/compose.yaml inside this container, so they must be the same
+      # absolute paths on the host and in the container. Keep this path
+      # equal to deploy_dir in build.sh.
+      - /path/to/deploy/:/path/to/deploy/
+    expose:
+      - 3000
+    environment:
+      - LOG_FILE_PATH=log/app.log
+      - HOOKED_HOST=0.0.0.0
+      - HOOKED_PORT=3000
+      - BUILD_ENTRY_SCRIPT_PATH=./build.sh
+      - WEBHOOK_SECRET=/run/secrets/webhook_secret
+      - WATCH_PUSH_BRANCH=main
+      - GIT_HOST=github.com
+      # - GIT_URL=https://git.example.com
+      # - GIT_SSH_HOST=git-ssh.example.com
+      - DISCORD_WEBHOOK_URL=/run/secrets/discord_webhook_url
+    secrets:
+      - webhook_secret
+      - git_token
+      - discord_webhook_url
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    pull_policy: always
+    restart: unless-stopped
+    command: tunnel run --token-file /run/secrets/cf_tunnel_token
+    # hooked stays off the tunnel network, so the app cannot reach it directly.
+    networks:
+      - default
+      - tunnel
+    secrets:
+      - cf_tunnel_token
+
+networks:
+  # The fixed name lets app/compose.yaml join this network as external.
+  tunnel:
+    name: my-app-tunnel
+
+secrets:
+  webhook_secret:
+    file: ./.secrets/webhook_secret
+  git_token:
+    file: ./.secrets/git_token
+  discord_webhook_url:
+    file: ./.secrets/discord_webhook_url
+  cf_tunnel_token:
+    file: ./.secrets/cf_tunnel_token

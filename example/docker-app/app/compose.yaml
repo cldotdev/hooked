@@ -1,0 +1,28 @@
+# A separate project from hooked's: `up` here can never recreate the hooked
+# container that is running the build.
+name: my-app
+
+services:
+  app:
+    build:
+      # build.sh exports the pushed commit here. The repository supplies the
+      # Dockerfile.
+      context: ../src
+      # `none` blocks a malicious Dockerfile from reaching services on the
+      # host's bridge network, but also blocks dependency downloads.
+      # network: none
+    restart: unless-stopped
+    # Grant the app only the secrets, volumes, and networks it needs.
+    # Each option below can break an app, so enable one at a time.
+    # cap_drop: [ALL]
+    # read_only: true
+    # security_opt: [no-new-privileges:true]
+    networks:
+      - default
+      - tunnel
+
+networks:
+  # Created by hooked's compose.yaml, which must be up first.
+  tunnel:
+    name: my-app-tunnel
+    external: true
