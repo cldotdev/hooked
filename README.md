@@ -68,7 +68,7 @@ The image runs the build script with git configured for one base URL over HTTP o
 - `GIT_URL`: The base URL the build script fetches from: `http` or `https`, a host, an optional port, and an optional path (for example `https://git.example.com` or `http://server:3000`). Defaults to `https://<GIT_HOST>`. Any other scheme makes the container print an error and exit. The resolved value, without a trailing slash, is exported to the build script, so the script can build repository URLs as `"$GIT_URL/<owner>/<repo>.git"`. Use `http` only on an internal network you trust, because the token is then sent in cleartext.
 - `GIT_HOST`: A shorthand for `GIT_URL=https://<GIT_HOST>`. Defaults to `github.com`. `GIT_URL` takes precedence when both are set.
 - `GIT_SSH_HOST`: The host, with an optional `:port`, whose SSH remotes (`ssh://git@<host>/`, `git+ssh://git@<host>/`, and `git@<host>:`) are rewritten to `GIT_URL`. Defaults to the host of `GIT_URL` without its port. Set it when the SSH domain differs from the web domain, for example `git-ssh.example.com` for `GIT_URL=https://git.example.com`. The SCP-style form `git@<host>:` cannot carry a port, so it matches the host alone. Only the `git` SSH user and non-IPv6 hosts are supported.
-- `/run/secrets/git_token`: An access token for `GIT_URL`, provided as a Docker secret and stored for its scheme, host, and port. Without it, git runs unauthenticated.
+- `/run/secrets/git_token`: An access token for `GIT_URL`, provided as a Docker secret and stored for its scheme, host, and port. Without it, or when the file is empty, git runs unauthenticated.
 
 This git setup applies only to processes started by hooked, so a shell opened with `docker exec` does not have it.
 

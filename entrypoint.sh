@@ -34,12 +34,17 @@ for prefix in "ssh://git@${GIT_SSH_HOST}/" "git+ssh://git@${GIT_SSH_HOST}/" "git
 done
 export GIT_CONFIG_COUNT="$n"
 
-if [ -f /run/secrets/git_token ]; then
+# An empty file counts as no token, so a compose file can always declare the
+# secret. An unreadable file still fails the start through set -e.
+GIT_TOKEN=
+if [ -e /run/secrets/git_token ]; then
   GIT_TOKEN=$(cat /run/secrets/git_token)
+fi
+if [ -n "$GIT_TOKEN" ]; then
   (umask 077 && echo "${git_scheme}://token:${GIT_TOKEN}@${git_authority}" > ~/.git-credentials)
   chmod 600 ~/.git-credentials
 else
-  echo "Warning: No git token found at /run/secrets/git_token" >&2
+  echo "Warning: /run/secrets/git_token is missing or empty, so git runs unauthenticated" >&2
 fi
 
 exec "$@"

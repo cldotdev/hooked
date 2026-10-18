@@ -45,7 +45,7 @@ The container SHALL rewrite `ssh://git@<ssh-host>/`, `git+ssh://git@<ssh-host>/`
 - **THEN** git fetches from `http://server:3000/owner/repo.git`
 
 ### Requirement: Token from a Docker secret
-When `/run/secrets/git_token` exists, the container SHALL store it as the credential for the scheme, host, and port of `GIT_URL`. When it does not exist, the container SHALL print a warning and still start. The container SHALL NOT read `/run/secrets/github_pat`.
+When `/run/secrets/git_token` exists and is not empty, the container SHALL store it as the credential for the scheme, host, and port of `GIT_URL`. When it does not exist or is empty, the container SHALL store no credential, print a warning, and still start. The container SHALL NOT read `/run/secrets/github_pat`.
 
 #### Scenario: Token present
 - **WHEN** `/run/secrets/git_token` contains a token and `GIT_HOST=git.example.com`
@@ -58,3 +58,7 @@ When `/run/secrets/git_token` exists, the container SHALL store it as the creden
 #### Scenario: Token missing
 - **WHEN** `/run/secrets/git_token` does not exist
 - **THEN** the container prints a warning and starts hooked
+
+#### Scenario: Token empty
+- **WHEN** `/run/secrets/git_token` exists but is empty
+- **THEN** the container stores no credential, prints a warning, and starts hooked
