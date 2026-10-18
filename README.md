@@ -93,11 +93,18 @@ See [Static Site Example](#static-site-example) for a complete setup. Released i
 The pieces fit together as follows:
 
 - `build.sh`: copy it as the build script. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
-- `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script.
+- `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script. The `cloudflared` service connects a Cloudflare Tunnel using the token in `.secrets/cf_tunnel_token`; route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://web:80` for the site.
 - `nginx.conf`: serves `/srv/site/current`. nginx resolves the symlink on each request, so a new release needs no reload.
 - `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker](#docker).
 
 The build and site directories must be writable by the user hooked runs as.
+
+The `cloudflared` service uses the `latest` image with `pull_policy: always`, so each `docker compose up -d` pulls the newest release; a container restart does not. The replaced image stays on the host without a tag, so remove it after the update:
+
+```txt
+docker compose up -d
+docker image prune -f --filter label=org.opencontainers.image.source=https://github.com/cloudflare/cloudflared
+```
 
 ## Migration
 

@@ -38,6 +38,13 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "127.0.0.1:8080:80"
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    pull_policy: always
+    restart: unless-stopped
+    command: tunnel run --token-file /run/secrets/cf_tunnel_token
+    secrets:
+      - cf_tunnel_token
 
 secrets:
   webhook_secret:
@@ -46,3 +53,5 @@ secrets:
     file: ./.secrets/git_token
   discord_webhook_url:
     file: ./.secrets/discord_webhook_url
+  cf_tunnel_token:
+    file: ./.secrets/cf_tunnel_token
