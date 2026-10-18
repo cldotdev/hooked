@@ -29,7 +29,10 @@ rm -rf "$src"
 mkdir -p "$src"
 git -C repo.git archive "$commit_id" | tar -x -C "$src"
 
-docker compose -f "$compose_file" up -d --build --remove-orphans
+# Builds run one at a time, so without a timeout, a start that never settles
+# would hold up every later push.
+docker compose -f "$compose_file" up -d --build --remove-orphans \
+  --wait --wait-timeout 300
 
 # Bound disk use: the daemon-wide build cache, then this project's untagged
 # images.

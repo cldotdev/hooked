@@ -12,6 +12,10 @@ services:
       # host's bridge network, but also blocks dependency downloads.
       # network: none
     restart: unless-stopped
+    # Without a healthcheck, `up --wait` in build.sh only checks that the
+    # container is running, which an app in a crash loop can still pass.
+    # healthcheck:
+    #   test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:<port>/"]
     # Grant the app only the secrets, volumes, and networks it needs.
     # Each option below can break an app, so enable one at a time.
     # cap_drop: [ALL]

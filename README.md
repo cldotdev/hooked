@@ -84,7 +84,7 @@ mkdir -p .srv/hooked
 
 hooked runs the build script directly, so it needs the executable bit: `chmod +x .srv/hooked/build.sh`.
 
-See [Static Site Example](#static-site-example) or [Docker App Example](#docker-app-example) for a complete setup. Both examples include a `cloudflared` service that connects a Cloudflare Tunnel using the token in `.secrets/cf_tunnel_token`. Released images are published as `ghcr.io/cldotdev/hooked`.
+See [Static Site Example](#static-site-example) or [Docker App Example](#docker-app-example) for a complete setup. Each example's compose file sets `name:` so that the project keeps its name when the directory changes; give every deployment on a host its own name. Both examples include a `cloudflared` service that connects a Cloudflare Tunnel using the token in `.secrets/cf_tunnel_token`, with its metrics server bound to the container's loopback. Released images are published as `ghcr.io/cldotdev/hooked`.
 
 The `cloudflared` service uses the `latest` image with `pull_policy: always`, so each `docker compose up -d` pulls the newest release; a container restart does not. The replaced image stays on the host without a tag, so remove it after the update:
 
@@ -101,14 +101,14 @@ The pieces fit together as follows:
 
 - `build.sh`: copy it as the build script. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
 - `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script. The `cloudflared` service connects the tunnel; route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://web:80` for the site.
-- `nginx.conf`: serves `/srv/site/current`. nginx resolves the symlink on each request, so a new release needs no reload.
+- `nginx.conf`: serves `/srv/site/current`, and the site's `404.html`, if it has one, for missing pages. nginx resolves the symlink on each request, so a new release needs no reload.
 - `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker](#docker).
 
 The build and site directories must be writable by the user hooked runs as.
 
 ### Docker App Example
 
-`example/docker-app/` deploys a long-running app so that the repository supplies only a Dockerfile and source, while the host owns all runtime configuration. `build.sh` fetches the branch into a bare repository, exports the pushed commit with `git archive` into a fixed source directory, and runs `docker compose up -d --build` on a compose file that lives on the host. A malicious push can change what the build runs but cannot grant it host access. The script then prunes the daemon-wide build cache and the project's untagged images.
+`example/docker-app/` deploys a long-running app so that the repository supplies only a Dockerfile and source, while the host owns all runtime configuration. `build.sh` fetches the branch into a bare repository, exports the pushed commit with `git archive` into a fixed source directory, and runs `docker compose up -d --build --wait` on a compose file that lives on the host. The build fails if the app does not pass the healthcheck in `app/compose.yaml` within the `--wait-timeout` set in `build.sh`; without a healthcheck, it only fails if the container never reaches the running state. A malicious push can change what the build runs but cannot grant it host access. The script then prunes the daemon-wide build cache and the project's untagged images.
 
 The pieces fit together as follows:
 

@@ -1,3 +1,4 @@
+name: my-site
 services:
   hooked:
     image: ghcr.io/cldotdev/hooked:latest
@@ -42,7 +43,7 @@ services:
     image: cloudflare/cloudflared:latest
     pull_policy: always
     restart: unless-stopped
-    command: tunnel run --token-file /run/secrets/cf_tunnel_token
+    command: tunnel --metrics 127.0.0.1:20241 run --token-file /run/secrets/cf_tunnel_token
     secrets:
       - cf_tunnel_token
 

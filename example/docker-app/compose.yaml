@@ -1,3 +1,4 @@
+name: my-app-deploy
 services:
   hooked:
     image: ghcr.io/cldotdev/hooked:latest
@@ -34,7 +35,9 @@ services:
     image: cloudflare/cloudflared:latest
     pull_policy: always
     restart: unless-stopped
-    command: tunnel run --token-file /run/secrets/cf_tunnel_token
+    # The metrics server listens on all interfaces by default, which would
+    # expose it to the app on the tunnel network.
+    command: tunnel --metrics 127.0.0.1:20241 run --token-file /run/secrets/cf_tunnel_token
     # hooked stays off the tunnel network, so the app cannot reach it directly.
     networks:
       - default
