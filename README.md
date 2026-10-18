@@ -129,7 +129,19 @@ To run the container as your host user with `HOST_UID` and `HOST_GID`, first giv
 sudo chown -R "$(id -u):$(id -g)" .srv/hooked /path/to/repo
 ```
 
-## Releasing
+## Development
+
+### Checks
+
+CI runs these checks with the Rust version named in the `FROM rust:` line of the `Dockerfile`:
+
+```txt
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+### Releasing
 
 1. Set `version` in `Cargo.toml` to the new version and run `cargo build` so that `Cargo.lock` follows, then commit.
 2. Push an annotated tag named after the version, without a `v` prefix (for example `0.4.0`). The annotation becomes the release notes.
