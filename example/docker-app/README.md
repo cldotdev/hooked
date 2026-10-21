@@ -5,13 +5,13 @@ This example deploys a long-running app so that the repository supplies only a D
 The pieces fit together as follows:
 
 - `build.sh`: the build script; see [Deployment Steps](#deployment-steps) for where it goes. Set the repository path (appended to `GIT_URL`) and `deploy_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The script reads the compose project name from `app/compose.yaml`, so the name is set in one place.
-- `compose.yaml`: the deploy project with the `hooked` and `cloudflared` services. The `hooked` service mounts the deploy directory at the same absolute path as on the host, because `docker compose` runs in the hooked container, where it resolves any bind mounts and secret files in `app/compose.yaml`. This path must match `deploy_dir` in `build.sh`. Route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://app:<port>` for the app.
+- `compose.yaml`: the deploy project with the `hooked` and `tunnel` services. The `hooked` service mounts the deploy directory at the same absolute path as on the host, because `docker compose` runs in the hooked container, where it resolves any bind mounts and secret files in `app/compose.yaml`. This path must match `deploy_dir` in `build.sh`. Route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://app:<port>` for the app.
 - `app/compose.yaml`: the app as a separate compose project, so that `up` can never recreate the hooked container that is running the build. Its `build.context` is the exported source, relative to this file. Hardening options and `build.network: none` are commented out because they can break an app.
 - `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker Socket](../README.md#docker-socket).
 
 The deploy directory must be writable by the user hooked runs as, because `build.sh` replaces `src/` in it on each build.
 
-The app and `cloudflared` are in different projects, so they share a network named `my-app-tunnel`; give it a name unique on the host. The deploy project defines it and attaches only `cloudflared` to it, and `app/compose.yaml` joins it as external. hooked stays off it, so the app cannot reach hooked directly. Start the deploy project first, because it creates the network. Rollback is a `git revert` and a push; the image is rebuilt under the same name and not tagged per commit.
+The app and the `tunnel` service are in different projects, so they share a network named `my-app-tunnel`; give it a name unique on the host. The deploy project defines it and attaches only the `tunnel` service to it, and `app/compose.yaml` joins it as external. hooked stays off it, so the app cannot reach hooked directly. Start the deploy project first, because it creates the network. Rollback is a `git revert` and a push; the image is rebuilt under the same name and not tagged per commit.
 
 The build context does not need the same path on the host and in the container: `docker compose build` streams it to the daemon, and a relative `build.context` resolves against the directory of the compose file. Only bind mounts and secret files in `app/compose.yaml` need matching paths.
 
@@ -35,4 +35,4 @@ Run these steps in the directory you deploy from. The shared setup is explained 
 8. Start the deploy project with `docker compose up -d`. Do this before the first push, because it creates the `tunnel` network that `app/compose.yaml` joins as external.
 9. Configure the webhook on the repository as described in [Usage](../../README.md#usage), with the same secret as `.secrets/webhook_secret`.
 10. In the Cloudflare Tunnel, route one public hostname to `http://hooked:3000` for the webhook and another to `http://app:<port>` for the app. Use the hooked hostname as the webhook URL's base, for example `https://<hooked-hostname>/webhooks/github`.
-11. Push to the watched branch. The first build creates the bare repository, exports the source into `<deploy_dir>/src`, and starts the app project. To update `cloudflared`, see [Cloudflare Tunnel](../README.md#cloudflare-tunnel).
+11. Push to the watched branch. The first build creates the bare repository, exports the source into `<deploy_dir>/src`, and starts the app project. To update the tunnel, see [Cloudflare Tunnel](../README.md#cloudflare-tunnel).

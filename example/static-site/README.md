@@ -5,7 +5,7 @@ This example deploys a Hugo site so that the repository supplies only the site s
 The pieces fit together as follows:
 
 - `build.sh`: the build script; see [Deployment Steps](#deployment-steps) for where it goes. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
-- `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script. The `cloudflared` service connects the tunnel; route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://web:80` for the site.
+- `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script. The `tunnel` service connects the Cloudflare Tunnel; route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://web:80` for the site.
 - `nginx.conf`: serves `/srv/site/current`, and the site's `404.html`, if it has one, for missing pages. nginx resolves the symlink on each request, so a new release needs no reload.
 - `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker Socket](../README.md#docker-socket).
 
@@ -29,4 +29,4 @@ Run these steps in the directory you deploy from. The shared setup is explained 
 8. Start the stack with `docker compose up -d`.
 9. Configure the webhook on the repository as described in [Usage](../../README.md#usage), with the same secret as `.secrets/webhook_secret`.
 10. In the Cloudflare Tunnel, route one public hostname to `http://hooked:3000` for the webhook and another to `http://web:80` for the site. Use the hooked hostname as the webhook URL's base, for example `https://<hooked-hostname>/webhooks/github`.
-11. Push to the watched branch. The first build creates the bare repository and the first release, and `web` has nothing to serve until it finishes. To update `cloudflared`, see [Cloudflare Tunnel](../README.md#cloudflare-tunnel).
+11. Push to the watched branch. The first build creates the bare repository and the first release, and `web` has nothing to serve until it finishes. To update the tunnel, see [Cloudflare Tunnel](../README.md#cloudflare-tunnel).

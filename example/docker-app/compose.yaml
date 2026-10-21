@@ -31,7 +31,7 @@ services:
       - webhook_secret
       - git_token
       - discord_webhook_url
-  cloudflared:
+  tunnel:
     image: cloudflare/cloudflared:latest
     pull_policy: always
     restart: unless-stopped

@@ -27,9 +27,9 @@ Each example's compose file sets `name:` so that the project keeps its name when
 
 ## Cloudflare Tunnel
 
-Both examples include a `cloudflared` service that connects a Cloudflare Tunnel using the token in `.secrets/cf_tunnel_token`, with its metrics server bound to the container's loopback.
+Both examples include a `tunnel` service that connects a Cloudflare Tunnel using the token in `.secrets/cf_tunnel_token`, with its metrics server bound to the container's loopback.
 
-The `cloudflared` service uses the `latest` image with `pull_policy: always`, so each `docker compose up -d` pulls the newest release; a container restart does not. The replaced image stays on the host without a tag, so remove it after the update:
+The `tunnel` service uses the `latest` image with `pull_policy: always`, so each `docker compose up -d` pulls the newest release; a container restart does not. The replaced image stays on the host without a tag, so remove it after the update:
 
 ```txt
 docker compose up -d
