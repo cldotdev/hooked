@@ -1,8 +1,17 @@
 name: my-app-deploy
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-50m}"
+    max-file: "${LOG_MAX_FILE:-10}"
+    compress: "true"
+
 services:
   hooked:
     image: ghcr.io/cldotdev/hooked:latest
     restart: unless-stopped
+    logging: *default-logging
     user: "${HOST_UID:-0}:${HOST_GID:-0}"
     group_add:
       - "${DOCKER_GID:?set DOCKER_GID in .env to the host docker group ID}"
@@ -32,18 +41,19 @@ services:
       - git_token
       - discord_webhook_url
   tunnel:
-    image: cloudflare/cloudflared:latest
-    pull_policy: always
-    restart: unless-stopped
+    image: cloudflare/cloudflared:latest # dclint disable-line service-image-require-explicit-tag
+    secrets:
+      - cf_tunnel_token
     # The metrics server listens on all interfaces by default, which would
     # expose it to the app on the tunnel network.
     command: tunnel --metrics 127.0.0.1:20241 run --token-file /run/secrets/cf_tunnel_token
+    restart: unless-stopped
+    logging: *default-logging
+    pull_policy: always
     # hooked stays off the tunnel network, so the app cannot reach it directly.
     networks:
       - default
       - tunnel
-    secrets:
-      - cf_tunnel_token
 
 networks:
   # The fixed name lets app/compose.yaml join this network as external.

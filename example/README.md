@@ -21,6 +21,10 @@ mkdir -p .srv/hooked
 
 hooked runs the build script directly, so it needs the executable bit: `chmod +x .srv/hooked/build.sh`.
 
+## Logging
+
+Every service logs through the `json-file` driver, which rotates at `LOG_MAX_SIZE` (default `50m`) and keeps `LOG_MAX_FILE` files (default `10`). Set them in `.env` to change the limits.
+
 ## Project Name
 
 Each example's compose file sets `name:` so that the project keeps its name when the directory changes; give every deployment on a host its own name.
