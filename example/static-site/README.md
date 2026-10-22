@@ -6,7 +6,7 @@ The pieces fit together as follows:
 
 - `build.sh`: the build script; see [Deployment Steps](#deployment-steps) for where it goes. Set the repository path (appended to `GIT_URL`), Hugo image, and `base_dir` at the top; the branch comes from `WATCH_PUSH_BRANCH`. The fetch uses the credentials the image sets up for `GIT_URL`.
 - `compose.yaml`: the `hooked` service mounts the build and site directories at the same absolute paths as on the host, because `build.sh` passes them to `docker run -v`. These paths must match `base_dir` in `build.sh`. The `web` service serves `.srv/site/` read-only and is never touched by the build script. The `tunnel` service connects the Cloudflare Tunnel; route the tunnel's public hostnames to `http://hooked:3000` for the webhook and `http://web:80` for the site.
-- `nginx.conf`: serves `/srv/site/current`, and the site's `404.html`, if it has one, for missing pages. nginx resolves the symlink on each request, so a new release needs no reload.
+- `nginx.conf`: serves `/srv/site/current`, and the site's `404.html`, if it has one, for missing pages. nginx resolves the symlink on each request, so a new release needs no reload. It sets `Cache-Control: no-cache` on HTML only, because a generic Hugo site does not fingerprint its assets, takes the client IP from `CF-Connecting-IP` when the request comes from a Docker network address, and enables gzip.
 - `.env.example`: copy it to `.env` and set `DOCKER_GID`; see [Docker Socket](../README.md#docker-socket).
 
 The build and site directories must be writable by the user hooked runs as.
