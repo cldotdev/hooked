@@ -1,5 +1,5 @@
 use clap::ArgAction;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::fs;
 
 #[derive(Parser)]
@@ -41,8 +41,22 @@ pub struct Config {
     #[arg(long, env, value_parser = parse_secret_or_env)]
     pub discord_webhook_url: Option<String>,
 
-    #[arg(short = '?', long, action = ArgAction::Help, help = "Print help")]
+    #[arg(short = '?', long, global = true, action = ArgAction::Help, help = "Print help")]
     pub help: (),
+
+    /// Start the server when omitted.
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+pub enum Command {
+    /// Build a commit through the running server, as if it were pushed to the
+    /// watched branch.
+    Trigger {
+        /// The full or abbreviated commit ID, in lowercase hex.
+        commit: String,
+    },
 }
 
 const SECRETS_DIR: &str = "/run/secrets/";
@@ -107,6 +121,13 @@ mod tests {
             parse(&[&format!("--discord-webhook-url={}", url)]).discord_webhook_url,
             Some(url.to_string())
         );
+    }
+
+    #[test]
+    fn trigger_subcommand_is_optional() {
+        assert!(parse(&[]).command.is_none());
+        let config = parse(&["trigger", "abc123"]);
+        assert!(matches!(config.command, Some(Command::Trigger { commit }) if commit == "abc123"));
     }
 
     #[test]

@@ -44,11 +44,15 @@ The system SHALL read the event type from `X-GitHub-Event`. It SHALL answer `pin
 - **THEN** the system responds 200 with `unhandled ref` and does not build
 
 ### Requirement: Required push fields
-For a push to the watched branch, the system SHALL respond 400 naming the field when any of `repository.full_name`, `after`, `head_commit.url`, or `head_commit.committer.name` is missing or empty.
+For a push to the watched branch, the system SHALL respond 400 naming the field when any of `repository.full_name`, `after`, or `head_commit.committer.name` is missing or empty. A missing or empty `head_commit.url` SHALL NOT cause a 400; the push is built without a commit URL.
 
 #### Scenario: Missing head commit
 - **WHEN** a signed push to the watched branch has no `head_commit`
 - **THEN** the system responds 400 and does not build
+
+#### Scenario: Missing head commit URL
+- **WHEN** a signed push to the watched branch has `head_commit.committer.name` but no `head_commit.url`
+- **THEN** the system responds 200 with `push event accepted` and builds the pushed commit
 
 ### Requirement: Provider-neutral settings
 The system SHALL take the webhook secret from `--webhook-secret` or `WEBHOOK_SECRET` and the watched branch from `--watch-push-branch` or `WATCH_PUSH_BRANCH`. A webhook secret value starting with `/run/secrets/` SHALL be read from that file with surrounding whitespace trimmed. The system SHALL NOT accept the former `--github-webhook-secret`, `--github-watch-push-branch`, `GITHUB_WEBHOOK_SECRET`, or `GITHUB_WATCH_PUSH_BRANCH`.

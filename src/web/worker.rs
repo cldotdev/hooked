@@ -11,7 +11,7 @@ pub struct BuildJob {
     pub commit_id: String,
     pub repo: String,
     pub branch: String,
-    pub head_commit_url: String,
+    pub head_commit_url: Option<String>,
     pub committer: String,
 }
 
@@ -108,19 +108,21 @@ fn embed_payload(job: &BuildJob, success: bool) -> Value {
     };
     let short_commit_id: String = job.commit_id.chars().take(7).collect();
 
-    json!({
-        "embeds": [{
-            "title": title,
-            "url": job.head_commit_url,
-            "color": color,
-            "fields": [
-                { "name": "Repository", "value": job.repo },
-                { "name": "Branch", "value": job.branch, "inline": true },
-                { "name": "Commit ID", "value": short_commit_id, "inline": true },
-                { "name": "Committer", "value": job.committer }
-            ]
-        }]
-    })
+    let mut embed = json!({
+        "title": title,
+        "color": color,
+        "fields": [
+            { "name": "Repository", "value": job.repo },
+            { "name": "Branch", "value": job.branch, "inline": true },
+            { "name": "Commit ID", "value": short_commit_id, "inline": true },
+            { "name": "Committer", "value": job.committer }
+        ]
+    });
+    if let Some(url) = &job.head_commit_url {
+        embed["url"] = json!(url);
+    }
+
+    json!({ "embeds": [embed] })
 }
 
 #[cfg(test)]
@@ -135,7 +137,7 @@ mod tests {
             commit_id: commit_id.to_string(),
             repo: "owner/repo".to_string(),
             branch: "master".to_string(),
-            head_commit_url: "https://example.com/commit".to_string(),
+            head_commit_url: Some("https://example.com/commit".to_string()),
             committer: "Alice".to_string(),
         }
     }
@@ -251,6 +253,14 @@ mod tests {
         assert_eq!(e["fields"][1]["value"], "master");
         assert_eq!(e["fields"][2]["value"], "0123456");
         assert_eq!(e["fields"][3]["value"], "Alice");
+    }
+
+    #[test]
+    fn embed_payload_without_url_has_no_url_key() {
+        let mut job = job("abc");
+        job.head_commit_url = None;
+        let v = embed_payload(&job, true);
+        assert!(v["embeds"][0].get("url").is_none());
     }
 
     #[test]

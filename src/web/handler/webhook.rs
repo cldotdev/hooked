@@ -67,11 +67,14 @@ fn handle_push<'a>(ctx: &Context, body: &str) -> Result<HttpSuccess<'a>, HttpErr
 
     let repo = required(&payload["repository"]["full_name"], "repository.full_name")?;
     let commit_id = required(&payload["after"], "after")?;
-    let head_commit_url = required(&payload["head_commit"]["url"], "head_commit.url")?;
     let committer = required(
         &payload["head_commit"]["committer"]["name"],
         "head_commit.committer.name",
     )?;
+    let head_commit_url = payload["head_commit"]["url"]
+        .as_str()
+        .filter(|u| !u.is_empty())
+        .map(String::from);
 
     info!(commit_id = %commit_id, "push event accepted");
     ctx.build_tx.send_replace(Some(BuildJob {
@@ -100,9 +103,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use clap::Parser;
-    use hmac::{Hmac, KeyInit, Mac};
     use serde_json::json;
-    use sha2::Sha256;
     use std::sync::Arc;
     use tokio::sync::watch;
     use tower::ServiceExt;
@@ -116,9 +117,7 @@ mod tests {
     }
 
     fn sign(secret: &str, body: &str) -> String {
-        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(body.as_bytes());
-        format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
+        crate::crypto::sign(secret.as_bytes(), body.as_bytes()).unwrap()
     }
 
     fn github_push() -> Value {
@@ -266,8 +265,24 @@ mod tests {
         payload.as_object_mut().unwrap().remove("head_commit");
         let (res, job) = send_signed("/webhooks/gitea", "push", &payload).await;
         assert_eq!(res.status, StatusCode::BAD_REQUEST);
-        assert!(res.message.contains("head_commit.url"));
+        assert!(res.message.contains("head_commit.committer.name"));
         assert!(job.is_none());
+    }
+
+    #[tokio::test]
+    async fn push_without_head_commit_url_is_enqueued_without_url() {
+        for url in [None, Some(json!(""))] {
+            let mut payload = gitea_push();
+            let head_commit = payload["head_commit"].as_object_mut().unwrap();
+            head_commit.remove("url");
+            if let Some(url) = url {
+                head_commit.insert("url".into(), url);
+            }
+            let (res, job) = send_signed("/webhooks/gitea", "push", &payload).await;
+            assert_eq!(res.status, StatusCode::OK);
+            assert_eq!(res.message, "push event accepted");
+            assert_eq!(job.unwrap().head_commit_url, None);
+        }
     }
 
     #[tokio::test]

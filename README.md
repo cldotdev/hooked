@@ -43,6 +43,7 @@ The available arguments are described below:
 - `--webhook-secret`: The secret token to verify incoming webhook messages. See [Creating webhooks - GitHub Docs](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks) or [Webhooks - Gitea Docs](https://docs.gitea.com/usage/webhooks) for creating a webhook and setting the secret token.
 - `--watch-push-branch`: The Git branch name to watch.
 - `--discord-webhook-url`: The Discord webhook URL to send the notification to a Discord channel. See [Intro to Webhooks – Discord](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks) for creating a Discord webhook URL. Optional; when it is unset or empty, hooked only writes each build's commit ID and exit status to the log.
+- `trigger <commit>`: A subcommand that builds the given commit through the running server. Without a subcommand, hooked starts the server.
 
 Configure the webhook on the repository with the content type `application/json`, the same secret token, and the push event:
 
@@ -52,6 +53,14 @@ Configure the webhook on the repository with the content type `application/json`
 Write a build script with the commands to run on each push, and make it executable. hooked passes the pushed commit ID as the first argument and sends the script's stdout and stderr to Discord. If the script traces commands with `set -x`, turn tracing off with `set +x` around any command that expands a secret. See [the static site example](example/static-site/build.sh) or [the Docker app example](example/docker-app/build.sh) for a complete script.
 
 Builds run one at a time. If several pushes arrive while a build is running, hooked builds only the newest of them after the current build finishes and skips the rest.
+
+To rebuild a commit without a new push, run `hooked trigger <commit>` with the commit ID in lowercase hex. In Docker, run it inside the container, where the environment already provides the server's settings:
+
+```txt
+docker exec <container> hooked trigger <commit>
+```
+
+Outside Docker, pass the same arguments as the server (`hooked --build-entry-script-path=./build.sh --webhook-secret=<string> --watch-push-branch=master trigger <commit>`). The command sends a signed push event for the watched branch to the running server, so the build goes through the same queue and notifications as a push. It exits 0 when the server accepts the build, and prints the error and exits non-zero otherwise. The example scripts fetch only the watched branch, so they can build only commits on that branch.
 
 Finally, start the web server:
 
