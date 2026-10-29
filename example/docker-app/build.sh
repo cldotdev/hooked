@@ -29,6 +29,10 @@ rm -rf "$src"
 mkdir -p "$src"
 git -C repo.git archive "$commit_id" | tar -x -C "$src"
 
+# buildx bake lets the compose file read only files under the working
+# directory, such as build secrets. Run from deploy_dir to admit them.
+cd "$deploy_dir"
+
 # Builds run one at a time, so without a timeout, a start that never settles
 # would hold up every later push.
 docker compose -f "$compose_file" up -d --build --remove-orphans \

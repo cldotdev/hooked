@@ -13,7 +13,7 @@ The deploy directory must be writable by the user hooked runs as, because `build
 
 The app and the `tunnel` service are in different projects, so they share a network named `my-app-tunnel`; give it a name unique on the host. The deploy project defines it and attaches only the `tunnel` service to it, and `app/compose.yaml` joins it as external. hooked stays off it, so the app cannot reach hooked directly. Start the deploy project first, because it creates the network. Rollback is a `git revert` and a push; the image is rebuilt under the same name and not tagged per commit.
 
-The build context does not need the same path on the host and in the container: `docker compose build` streams it to the daemon, and a relative `build.context` resolves against the directory of the compose file. Only bind mounts and secret files in `app/compose.yaml` need matching paths.
+The build context does not need the same path on the host and in the container: `docker compose build` streams it to the daemon, and a relative `build.context` resolves against the directory of the compose file. Only bind mounts and secret files in `app/compose.yaml` need matching paths. Build secrets must also be under `deploy_dir`; see [Build Secrets and the Bake Check](#build-secrets-and-the-bake-check).
 
 For what a repository Dockerfile can and cannot reach during the build, see [Dockerfile Build Isolation](../../README.md#dockerfile-build-isolation).
 
@@ -26,7 +26,7 @@ Run these steps in the directory you deploy from. The shared setup is explained 
 3. Copy `build.sh` to `.srv/hooked/build.sh` and run `chmod +x .srv/hooked/build.sh`. The `hooked` service mounts `./.srv/hooked/` at `/app/` and sets `BUILD_ENTRY_SCRIPT_PATH=./build.sh`, so this is the file hooked runs.
 4. Edit the variables at the top of `.srv/hooked/build.sh`: the repository path in `repo_url` (`<owner>/<repo>`) and `deploy_dir`.
 5. In `compose.yaml`, replace `/path/to/deploy` in the `hooked` volumes with the same `deploy_dir`, on both sides of the colon. Set `name:`, the `tunnel` network `name:`, `WATCH_PUSH_BRANCH`, and `GIT_HOST` (or `GIT_URL` and `GIT_SSH_HOST`) as needed; see [Project Name](../README.md#project-name).
-6. Create the deploy directory at the `deploy_dir` path, owned by the user hooked runs as, and copy `app/compose.yaml` to `<deploy_dir>/app/compose.yaml`. Edit it: set `name:`, set the network `name:` to the same network name as in the deploy `compose.yaml`, enable the `healthcheck` with the app's port, and add the secrets, volumes, and hardening options the app needs. Bind mounts and secret files in this file must use paths that exist both on the host and in the hooked container, such as paths under `deploy_dir`.
+6. Create the deploy directory at the `deploy_dir` path, owned by the user hooked runs as, and copy `app/compose.yaml` to `<deploy_dir>/app/compose.yaml`. Edit it: set `name:`, set the network `name:` to the same network name as in the deploy `compose.yaml`, enable the `healthcheck` with the app's port, and add the secrets, volumes, and hardening options the app needs. Bind mounts, secret files, and any other files this file reads must use paths under `deploy_dir`, which exist both on the host and in the hooked container.
 7. Create the secret files in `.secrets/`:
    - `webhook_secret`: the secret token you set on the repository webhook.
    - `git_token`: an access token for `GIT_URL`. Leave the file empty for a public repository; git then runs unauthenticated. Keep the file, because `compose.yaml` still references it and the container cannot start without it.
@@ -36,3 +36,15 @@ Run these steps in the directory you deploy from. The shared setup is explained 
 9. Configure the webhook on the repository as described in [Usage](../../README.md#usage), with the same secret as `.secrets/webhook_secret`.
 10. In the Cloudflare Tunnel, route one public hostname to `http://hooked:3000` for the webhook and another to `http://app:<port>` for the app. Use the hooked hostname as the webhook URL's base, for example `https://<hooked-hostname>/webhooks/github`.
 11. Push to the watched branch. The first build creates the bare repository, exports the source into `<deploy_dir>/src`, and starts the app project. To update the tunnel, see [Cloudflare Tunnel](../README.md#cloudflare-tunnel).
+
+## Build Secrets and the Bake Check
+
+Docker Compose v5 builds through `buildx bake`, which refuses to read a file outside the process's working directory unless the build passes `--allow=fs.read=<path>`. This covers files such as build secrets declared with `file:` in `app/compose.yaml`; the build context is not checked. A build that reads a file outside the working directory fails with:
+
+```txt
+additional privileges requested: pass "--allow=fs.read=<path>" to grant requested privileges
+```
+
+hooked starts the build script in `/app`, so `build.sh` runs `cd "$deploy_dir"` before `docker compose`, and every file under `deploy_dir` passes the check. Keep build secrets and any other files `app/compose.yaml` reads under `deploy_dir`, for example in `<deploy_dir>/.secrets/`. Running compose from the compose file's directory (`<deploy_dir>/app`) does not work for a secret in `<deploy_dir>/.secrets/`, because the path leaves that directory. Neither `--project-directory` nor `COMPOSE_BAKE=false` changes the check. This was observed with Compose v5.6.0 and buildx v0.38.0 in `ghcr.io/cldotdev/hooked:0.6.3`; a later buildx release may resolve paths differently.
+
+If the files must stay outside `deploy_dir`, set `BUILDX_BAKE_ENTITLEMENTS_FS=0` under `environment:` of the `hooked` service in `compose.yaml`. This turns the check off for every build in the container. The bake definition comes from `app/compose.yaml` on the host, not from the repository, so a push cannot use the setting to read host files, but a compose file that names a wrong path then reads it without any error.

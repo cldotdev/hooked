@@ -99,6 +99,10 @@ This has limits, and only the default Dockerfile frontend was tested:
 
 ## Migration
 
+### Docker Compose v5 Build Fails with `--allow=fs.read`
+
+hooked images that ship Docker Compose v5 (0.6.3 ships v5.6.0) run `docker compose up --build` through `buildx bake`, which refuses to read files outside the working directory, such as build secrets. A build script that runs compose from `/app` then fails with `additional privileges requested: pass "--allow=fs.read=<path>"`. In a docker-app style script, add `cd "$deploy_dir"` before the `docker compose` call and keep those files under `deploy_dir`, or set `BUILDX_BAKE_ENTITLEMENTS_FS=0` on the `hooked` service. See [Build Secrets and the Bake Check](example/docker-app/README.md#build-secrets-and-the-bake-check).
+
 ### Upgrading from 0.4.x
 
 `compose.yaml` no longer uses `tecnativa/docker-socket-proxy`. Its filter matches only the request path and method, so an allowed `POST /containers/create` can still start a privileged container that mounts the host root, and `EXEC=1` reaches any container. It also broke buildx: the requests buildx makes (`POST /grpc`, `GET /v1.47/info`) fail through the proxy, so buildx switched to the `docker-container` driver and created a privileged `buildx_buildkit_default` container with its state volume and the `moby/buildkit:buildx-stable-1` image on the host. The hooked service now mounts the host socket directly.
